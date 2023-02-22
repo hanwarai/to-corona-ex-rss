@@ -11,10 +11,14 @@ feed_file = open('feed.csv')
 index = open('feeds/index.html', 'w')
 index.write('<!DOCTYPE html><html><body><ul>')
 
+headers = {
+    'x-api-environment-key': 'K4FWy7Iqott9mrw37hDKfZ2gcLOwO-kiLHTwXT8ad1E=',
+}
+
 for feed in csv.reader(feed_file):
     print(feed)
     comic_url = "https://api.to-corona-ex.com/comics/" + feed[0]
-    comic = json.loads(requests.get(comic_url).text)
+    comic = json.loads(requests.get(comic_url, headers=headers).text)
 
     rss = feedgenerator.Atom1Feed(
         title=comic.get('title'),
@@ -25,7 +29,7 @@ for feed in csv.reader(feed_file):
     )
 
     episodes_url = "https://api.to-corona-ex.com/episodes?comic_id=" + feed[0] + "&episode_status=free_viewing&limit=5&order=desc&sort=episode_order"
-    episodes = json.loads(requests.get(episodes_url).text)
+    episodes = json.loads(requests.get(episodes_url, headers=headers).text)
 
     for ep in episodes.get('resources'):
         rss.add_item(

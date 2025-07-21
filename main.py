@@ -1,27 +1,29 @@
+import csv
 import datetime
 import json
-import urllib
 
-import requests
 import feedgenerator
-import csv
+import requests
+from jinja2 import Environment, FileSystemLoader
 
 feed_file = open('feed.csv')
-
-index = open('feeds/index.html', 'w')
-index.write('<!DOCTYPE html><html><body><ul>')
 
 headers = {
     'x-api-environment-key': 'K4FWy7Iqott9mrw37hDKfZ2gcLOwO-kiLHTwXT8ad1E=',
 }
 
+rendered_feeds = []
 for feed in csv.reader(feed_file):
     print(feed)
+
     comic_url = "https://api.to-corona-ex.com/comics/" + feed[0]
     comic = json.loads(requests.get(comic_url, headers=headers).text)
 
+    comic_title = comic.get('title')
+    rendered_feeds.append({'id': feed[0], 'title': comic_title})
+
     rss = feedgenerator.Atom1Feed(
-        title=comic.get('title'),
+        title=comic_title,
         link="https://to-corona-ex.com/comics/" + feed[0],
         description=comic.get('description'),
         language="ja",
@@ -37,12 +39,18 @@ for feed in csv.reader(feed_file):
             title=ep.get('title'),
             link="https://to-corona-ex.com/episodes/" + ep.get('id'),
             description="",
-            pubdate=datetime.datetime.fromisoformat(ep.get('published_at'))
+            pubdate=datetime.datetime.fromisoformat(ep.get('published_at')),
+            content=""
         )
 
     with open('feeds/' + feed[0] + '.xml', 'w') as fp:
         rss.write(fp, 'utf-8')
 
-    index.write('<li><a href="{href}">{title}</a></li>'.format(href=feed[0] + '.xml', title=comic.get('title')))
-
-index.write('</ul></body></html>')
+# Generate index.html
+jinja_env = Environment(
+    loader=FileSystemLoader('templates'),
+    autoescape=True
+)
+jinja_template = jinja_env.get_template('index.html')
+index = open('feeds/index.html', 'w')
+index.write(jinja_template.render(feeds=rendered_feeds))

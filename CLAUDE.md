@@ -46,7 +46,6 @@ uv run main.py
 
 - `.github/workflows/gh-pages.yaml` — `main` への push と cron（`0 */12 * * *`, 12時間ごと）で `build` → `publish` を実行
 - `.github/dependabot.yaml` — github-actions と uv 依存を週次更新（commit prefix `ci`）
-- `keepalive` ジョブ — 60日無活動で schedule が停止する問題を回避するため、`liskin/gh-workflow-keepalive` で GitHub API 経由の再有効化を cron 実行時に行う
 
 ## 留意点
 

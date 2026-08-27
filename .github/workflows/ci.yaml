@@ -1,0 +1,86 @@
+name: ci
+
+# PR 用の軽量チェック。外部 API (api.to-corona-ex.com) は叩かず、
+# 「main へ入る前に壊れているとわかること」だけを数十秒で検証する。
+# 実際のフィード生成とデプロイは gh-pages.yaml (push / cron) が担当する。
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # checkout / setup-uv / setup-python の 3 つは、Dependabot が bump した
+      # action そのものを PR 上で実走行させるための検証でもある。
+      - uses: actions/checkout@v7
+
+      # gh-pages.yaml と同じく pyproject.toml のピンから uv のバージョンを読む。
+      - name: Resolve uv version
+        id: uv-version
+        run: |
+          version=$(grep -oP '"uv==\K[0-9]+\.[0-9]+\.[0-9]+' pyproject.toml)
+          if [ -z "$version" ]; then
+            echo "::error::could not resolve uv version pin from pyproject.toml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: ${{ steps.uv-version.outputs.version }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: "pyproject.toml"
+
+      # --locked: uv.lock が pyproject.toml と乖離していれば失敗する。
+      # Dependabot の uv PR が lock を更新し忘れた場合をここで止める。
+      - name: Install the project
+        run: uv sync --all-extras --locked
+
+      # feed.csv に数字以外の行 (特に末尾の空行) が混ざると main.py の
+      # API 呼び出しが落ちる。漫画 ID 追加時の典型的な事故をここで止める。
+      - name: Validate feed.csv
+        run: |
+          invalid=$(grep -nvE '^[0-9]+$' feed.csv) && status=0 || status=$?
+          if [ "$status" -eq 0 ]; then
+            echo "::error file=feed.csv::comic ID (数字のみ) 以外の行があります。末尾の空行に注意。"
+            printf '%s\n' "$invalid"
+            exit 1
+          elif [ "$status" -ne 1 ]; then
+            echo "::error file=feed.csv::feed.csv を読み取れませんでした (grep exit=$status)"
+            exit 1
+          fi
+          echo "feed.csv OK ($(grep -c '' feed.csv) 件)"
+
+      # main.py はトップレベルで API を叩くため import できない。構文だけ検査する。
+      - name: Syntax check main.py
+        run: uv run python -m compileall -q main.py
+
+      # 依存の import と index.html のレンダリングまでを外部通信なしで確認する。
+      # requests / feedgenerator / jinja2 の破壊的更新をここで検知する。
+      - name: Smoke test (no network)
+        run: |
+          uv run python - <<'PY'
+          import feedgenerator
+          import requests  # noqa: F401  (main.py が import できることの確認)
+          from jinja2 import Environment, FileSystemLoader
+
+          feedgenerator.Atom1Feed(
+              title="t", link="https://example.com", description="d", language="ja"
+          )
+
+          env = Environment(loader=FileSystemLoader("templates"), autoescape=True)
+          html = env.get_template("index.html").render(feeds=[{"id": "1", "title": "sample"}])
+          assert "sample" in html, "index.html のレンダリング結果に feed が含まれていません"
+          print("smoke OK")
+          PY

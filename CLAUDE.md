@@ -45,12 +45,13 @@ uv run main.py
 ## 自動化
 
 - `.github/workflows/gh-pages.yaml` — `main` への push と cron（`0 */12 * * *`, 12時間ごと）で `build` → `publish` を実行
+- `.github/workflows/ci.yaml` — `pull_request` で軽量チェック（`uv sync --locked` / `feed.csv` 検証 / `main.py` 構文 / import + テンプレートの smoke）。外部 API は叩かず数十秒で完走する
 - `.github/dependabot.yaml` — github-actions と uv 依存を週次更新（commit prefix `ci`）
 
 ## 留意点
 
 - `main.py` の `x-api-environment-key` はクライアント側で利用される公開キー（秘密情報ではない）。API のリクエストヘッダとして必須。
-- `feed.csv` は末尾改行込みのプレーンテキスト。`csv.reader` が空行を拾うと API 呼び出しがエラーになるため、末尾空行は避ける。
+- `feed.csv` は末尾改行込みのプレーンテキスト。`csv.reader` が空行を拾うと API 呼び出しがエラーになるため、末尾空行は避ける。PR を出せば `ci.yaml` の `Validate feed.csv` が空行・非数値行を検出する。
 
 ## 新しい漫画の追加
 

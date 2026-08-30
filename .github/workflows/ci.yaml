@@ -62,6 +62,12 @@ jobs:
           fi
           echo "feed.csv OK ($(grep -c '' feed.csv) 件)"
 
+      # ワークフロー定義自体の lint。actionlint 本体のバージョンは action 既定の latest に
+      # 任せる (ここを固定すると Dependabot が追えないピンになり、黙って腐る)。action 自体は
+      # SHA ピンなので供給網は押さえられている。
+      - name: Lint workflows
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+
       # main.py はトップレベルで API を叩くため import できない。構文だけ検査する。
       - name: Syntax check main.py
         run: uv run python -m compileall -q main.py
